@@ -2,14 +2,14 @@
   "name": "remoteme",
   "version": "1.0.0",
   "description": "Remote CLI Control Server - Control terminal commands via Flutter app",
-  "main": "simple_cli_server.js",
+  "main": "app.js",
   "bin": {
-    "remoteme": "./cli.js"
+    "remoteme": "./app.js"
   },
   "scripts": {
-    "start": "node simple_cli_server.js",
-    "dev": "nodemon simple_cli_server.js",
-    "remoteme": "node cli.js serve"
+    "start": "node app.js serve",
+    "dev": "nodemon app.js serve",
+    "remoteme": "node app.js serve"
   },
   "dependencies": {
     "cors": "^2.8.5",

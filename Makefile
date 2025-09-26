@@ -1,14 +1,13 @@
 # Cursor Remote Control - Makefile
 # This Makefile helps install and manage the Cursor Remote Control CLI tool
 
-.PHONY: help install uninstall build test clean dev remoteme start stop restart status
+ake ly 1ng por.PHONY: help install uninstall build test clean dev remoteme start stop restart status logs cursor-agent-test
 
 # Default target
 help:
 	@echo "Cursor Remote Control - Available commands:"
 	@echo ""
 	@echo "  make remoteme    - Build the Flutter app and prepare system"
-	@echo "  make remoteme serve - Start the server (remoteme serve)"
 	@echo "  make start       - Start the server only"
 	@echo "  make stop        - Stop the server"
 	@echo "  make restart     - Restart the server"
@@ -18,6 +17,8 @@ help:
 	@echo "  make test        - Test the installation"
 	@echo "  make clean       - Clean build artifacts"
 	@echo "  make status      - Show system status"
+	@echo "  make logs        - Show server logs"
+	@echo "  make cursor-agent-test - Test cursor-agent functionality"
 	@echo "  make help        - Show this help message"
 	@echo ""
 	@echo "Quick start:"
@@ -60,6 +61,15 @@ test:
 	@remoteme --help > /dev/null && echo "✅ CLI help command works" || (echo "❌ CLI help command failed" && exit 1)
 	@echo "✅ Installation test passed!"
 
+# Test cursor-agent functionality
+cursor-agent-test:
+	@echo "🤖 Testing cursor-agent functionality..."
+	@which cursor-agent > /dev/null || (echo "❌ cursor-agent not found in PATH" && exit 1)
+	@echo "✅ cursor-agent found in PATH"
+	@echo "🔍 Testing cursor-agent with simple command..."
+	@echo "hello world" | cursor-agent -p "echo this message" > /dev/null 2>&1 && echo "✅ cursor-agent test passed" || echo "❌ cursor-agent test failed"
+	@echo "✅ Cursor-agent test completed!"
+
 # Clean build artifacts
 clean:
 	@echo "🧹 Cleaning build artifacts..."
@@ -86,7 +96,7 @@ setup: server-deps flutter-deps install
 	@echo "Next steps:"
 	@echo "1. Build the Flutter app: make build"
 	@echo "2. Install on your device: make install-device"
-	@echo "3. Start the server: cursor-remote serve"
+	@echo "3. Start the server: make start"
 
 # Install Flutter app on connected device
 install-device:
@@ -102,6 +112,9 @@ status:
 	@echo "CLI Tool:"
 	@which remoteme > /dev/null && echo "✅ remoteme installed globally" || echo "❌ remoteme not installed"
 	@echo ""
+	@echo "Cursor Agent:"
+	@which cursor-agent > /dev/null && echo "✅ cursor-agent available" || echo "❌ cursor-agent not found"
+	@echo ""
 	@echo "Flutter App:"
 	@cd cursor_remote_app && fvm flutter doctor --version > /dev/null 2>&1 && echo "✅ Flutter environment ready" || echo "❌ Flutter environment not ready"
 	@echo ""
@@ -109,7 +122,10 @@ status:
 	@cd server && [ -d "node_modules" ] && echo "✅ Server dependencies installed" || echo "❌ Server dependencies not installed"
 	@echo ""
 	@echo "Server Status:"
-	@pgrep -f "node.*index.js" > /dev/null && echo "✅ Server is running" || echo "❌ Server is not running"
+	@pgrep -f "node.*app.js" > /dev/null && echo "✅ Server is running" || echo "❌ Server is not running"
+	@echo ""
+	@echo "Active Cursor-Agent Processes:"
+	@pgrep -f "cursor-agent" > /dev/null && pgrep -f "cursor-agent" | wc -l | xargs -I {} echo "🤖 {} cursor-agent process(es) running" || echo "🤖 No cursor-agent processes running"
 	@echo ""
 	@echo "Connected Devices:"
 	@adb devices | grep -v "List of devices" | grep -v "^$$" | wc -l | xargs -I {} echo "📱 {} device(s) connected"
@@ -121,23 +137,30 @@ remoteme: build
 	@echo "📱 Flutter app built and ready"
 	@echo "🔗 Connect your Flutter app to: http://YOUR_IP:3000"
 	@echo ""
-	@echo "To start server: make remoteme serve"
+	@echo "To start server: make start"
 	@echo "To install on device: make install-device"
 
 # Start the server
-remoteme serve:
+start:
 	@echo "🚀 Starting Cursor Remote Control server..."
-	@pgrep -f "node.*index.js" > /dev/null && echo "⚠️  Server already running" || (cd server && remoteme serve)
+	@pgrep -f "node.*app.js" > /dev/null && echo "⚠️  Server already running" || (cd server && node app.js serve)
 	@echo "✅ Server started on port 3000"
-
-# Start the server (alias)
-start: remoteme serve
 
 # Stop the server
 stop:
 	@echo "🛑 Stopping Cursor Remote Control server..."
-	@pkill -f "node.*index.js" && echo "✅ Server stopped" || echo "⚠️  No server running"
+	@pkill -f "node.*app.js" && echo "✅ Server stopped" || echo "⚠️  No server running"
+	@echo "🧹 Cleaning up any remaining cursor-agent processes..."
+	@pkill -f "cursor-agent" > /dev/null 2>&1 && echo "✅ Cursor-agent processes cleaned up" || echo "ℹ️  No cursor-agent processes to clean up"
 
 # Restart the server
 restart: stop start
 	@echo "🔄 Server restarted"
+
+# Show server logs
+logs:
+	@echo "📋 Server logs (last 50 lines):"
+	@echo "=================================="
+	@pgrep -f "node.*app.js" > /dev/null && echo "✅ Server is running - check terminal output" || echo "❌ Server is not running"
+	@echo ""
+	@echo "To see real-time logs, run: make dev"

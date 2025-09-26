@@ -6,9 +6,16 @@ And suppose you want to get a coffee but need to run an rsync on your server, or
 
 # Why this? Challenge
 
-[A youtube video demo](https://www.youtube.com/watch?v=GbQ7sQw6sB0) 
+
+Disclaimer: HERE THE CURSOR IS NOT WORKING
+
+[First hello world ( really )](https://www.youtube.com/watch?v=GbQ7sQw6sB0) 
 
 
 Thanks to the random user from Reddit that inspire me to do this.
+
+
+all this project was made using cursor IDE following the patterns concern using llm/know to share context between chat sessions and just a PoC to test this kind of application.
+
 
 For more things like this bullshit, take a look at my blog.robertocpaes.dev

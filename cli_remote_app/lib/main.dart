@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 void main() {
@@ -280,14 +281,42 @@ class _CursorRemoteScreenState extends State<CursorRemoteScreen> {
   @override
   void initState() {
     super.initState();
+    _loadServerUrl();
+  }
+
+  Future<void> _loadServerUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUrl = prefs.getString('server_url');
+    if (savedUrl != null && savedUrl.isNotEmpty) {
+      setState(() {
+        _serverUrl = savedUrl;
+      });
+    }
     _connectToServer();
+  }
+
+  Future<void> _saveServerUrl(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('server_url', url);
   }
 
   void _connectToServer() {
     try {
+      if (_serverUrl.isEmpty) {
+        _addLog('App Error: Server URL is empty', isSystem: true, isError: true);
+        return;
+      }
+      
+      _addLog('App: Connecting to $_serverUrl...', isSystem: true);
+      
+      // Dispose existing socket if any
+      socket?.dispose();
+      
       socket = io.io(_serverUrl, io.OptionBuilder()
           .setTransports(['websocket'])
           .enableAutoConnect()
+          .setReconnectionAttempts(5)
+          .setReconnectionDelay(2000)
           .build());
 
       socket?.onConnect((_) {
@@ -314,8 +343,16 @@ class _CursorRemoteScreenState extends State<CursorRemoteScreen> {
         setState(() {
           _isConnected = true;
         });
-        _addLog('🔄 Reconnected to server', isSystem: true);
+        _addLog('🔄 Reconnected to server at $_serverUrl', isSystem: true);
         _fetchAvailableModes(); // Fetch available modes when reconnected
+      });
+
+      socket?.onReconnectError((error) {
+        _addLog('❌ Reconnection failed: $error', isSystem: true, isError: true);
+      });
+
+      socket?.onReconnectFailed((_) {
+        _addLog('❌ Reconnection failed after all attempts', isSystem: true, isError: true);
       });
 
       socket?.onConnectError((error) {
@@ -332,15 +369,11 @@ class _CursorRemoteScreenState extends State<CursorRemoteScreen> {
 
       socket?.on('command_feedback', (data) {
         final message = data['message'] ?? 'No message';
-        final type = data['type'] ?? 'info';
+        final isSystem = data['isSystem'] ?? false;
+        final isError = data['isError'] ?? false;
         
-        if (type == 'success') {
-          _addLog('AI Response: $message', isSystem: false);
-        } else if (type == 'error') {
-          _addLog('Error: $message', isSystem: true, isError: true);
-        } else {
-          _addLog(message, isSystem: true);
-        }
+        // Just append what the server sends - no logic here
+        _addLog(message, isSystem: isSystem, isError: isError);
       });
 
       socket?.on('command_exit', (exitCode) {
@@ -382,7 +415,7 @@ class _CursorRemoteScreenState extends State<CursorRemoteScreen> {
   void _addLog(String message, {bool isSystem = false, bool isError = false}) {
     setState(() {
       final timestamp = DateTime.now().toString().substring(11, 19);
-      final prefix = isSystem ? '[SYSTEM]' : '[CURSOR]';
+      final prefix = isSystem ? '[SYSTEM]' : '';
       final errorPrefix = isError ? '[ERROR]' : '';
       _logs.add('$timestamp $errorPrefix$prefix $message');
     });
@@ -415,6 +448,21 @@ class _CursorRemoteScreenState extends State<CursorRemoteScreen> {
       'mode': _selectedMode
     });
     _commandController.clear();
+  }
+
+  void _stopCommand() {
+    if (!_isCommandRunning) return;
+    
+    _addLog('App: Stopping command execution...', isSystem: true);
+    
+    // Send stop command to server
+    socket?.emit('stop_command');
+    
+    setState(() {
+      _isCommandRunning = false;
+    });
+    
+    _addLog('App: Command stopped', isSystem: true);
   }
 
   // File upload method - COMMENTED OUT
@@ -472,14 +520,18 @@ class _CursorRemoteScreenState extends State<CursorRemoteScreen> {
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 print('DEBUG: Connect button pressed'); // Debug log
-                setState(() {
-                  _serverUrl = controller.text;
-                });
-                Navigator.of(context).pop();
-                socket?.disconnect();
-                _connectToServer();
+                final newUrl = controller.text.trim();
+                if (newUrl.isNotEmpty) {
+                  setState(() {
+                    _serverUrl = newUrl;
+                  });
+                  await _saveServerUrl(newUrl); // Save the new URL
+                  Navigator.of(context).pop();
+                  socket?.disconnect();
+                  _connectToServer();
+                }
               },
               child: Text(_isConnected ? 'Reconnect' : 'Connect'),
             ),
@@ -704,11 +756,12 @@ class _CursorRemoteScreenState extends State<CursorRemoteScreen> {
                   ),
                 ),
                 
-                // Send button
+                // Toggle Send/Stop button
                 IconButton(
-                  onPressed: _isConnected && !_isCommandRunning ? _sendCommand : null,
-                  icon: const Icon(Icons.send),
-                  tooltip: 'Send Command',
+                  onPressed: _isConnected ? (_isCommandRunning ? _stopCommand : _sendCommand) : null,
+                  icon: Icon(_isCommandRunning ? Icons.stop : Icons.send),
+                  tooltip: _isCommandRunning ? 'Stop Command' : 'Send Command',
+                  color: _isCommandRunning ? Colors.red : null,
             ),
           ],
         ),
